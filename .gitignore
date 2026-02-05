@@ -25,4 +25,5 @@ Thumbs.db
 DEBUG.md
 scanner.sh
 sonar-project.properties
+.scannerwork/
 
