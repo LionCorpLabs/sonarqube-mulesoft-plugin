@@ -16,6 +16,8 @@ A comprehensive static code analysis plugin for SonarQube that analyzes MuleSoft
 - [Building from Source](#building-from-source)
   - [Build Instructions](#build-instructions)
   - [Build Scripts](#build-scripts)
+- [Release Management](#release-management)
+- [SonarQube Analysis](#sonarqube-analysis)
 - [Testing](#testing)
 - [Technical Details](#technical-details)
 - [Contributing](#contributing)
@@ -70,7 +72,7 @@ The **SonarQube MuleSoft Plugin** provides 110 carefully crafted rules organized
 
 2. **Deploy to SonarQube**:
    ```bash
-   cp target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-FINAL.jar $SONARQUBE_HOME/extensions/plugins/sonar-mulesoft-plugin.jar
+   cp target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-FINAL.jar $SONARQUBE_HOME/extensions/plugins/sonar-mulesoft-plugin.jar
    ```
 
 3. **Restart SonarQube** and start analyzing your MuleSoft projects!
@@ -84,7 +86,7 @@ See the [Building from Source](#building-from-source) section for detailed devel
 ### Prerequisites
 
 - SonarQube Server 9.9 or higher
-- Java 17 or higher
+- Java 21 or higher
 - Maven 3.6+ (for building from source)
 
 ### Installation Steps
@@ -102,12 +104,12 @@ See the [Building from Source](#building-from-source) section for detailed devel
 2. **Locate the plugin JAR**:
 
    The build produces two JAR files:
-   - `target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-RAW.jar` - Unshaded jar without dependencies
-   - `target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-FINAL.jar` - Shaded jar with all dependencies (use this one)
+   - `target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-RAW.jar` - Unshaded jar without dependencies
+   - `target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-FINAL.jar` - Shaded jar with all dependencies (use this one)
 
 3. **Copy to SonarQube plugins directory**:
    ```bash
-   cp target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-FINAL.jar $SONARQUBE_HOME/extensions/plugins/sonar-mulesoft-plugin.jar
+   cp target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-FINAL.jar $SONARQUBE_HOME/extensions/plugins/sonar-mulesoft-plugin.jar
    ```
 
    **Note**: Use the **FINAL** jar as it contains all bundled dependencies (JavaParser, Commons Lang).
@@ -417,7 +419,7 @@ Common violations detected:
 
 ### Prerequisites
 
-- **Java 17** or higher
+- **Java 21** or higher
 - **Maven 3.6+** or higher
 - Git
 
@@ -479,12 +481,12 @@ The build process creates two JAR files:
 
 1. **RAW jar** (unshaded, without dependencies):
    ```
-   target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-RAW.jar
+   target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-RAW.jar
    ```
 
 2. **FINAL jar** (shaded, with all dependencies - **use this for deployment**):
    ```
-   target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-FINAL.jar
+   target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-FINAL.jar
    ```
 
 The **FINAL** jar includes all required dependencies (JavaParser, Commons Lang) and is the artifact you should deploy to SonarQube.
@@ -508,7 +510,7 @@ Options:
 ```
 
 **Features:**
-- Validates prerequisites (Java 17+, Maven 3.6+, Python 3)
+- Validates prerequisites (Java 21+, Maven 3.6+, Python 3)
 - Optionally generates skeleton check classes
 - Runs full Maven build lifecycle
 - Creates both RAW and FINAL JAR files
@@ -556,6 +558,121 @@ python3 scripts/generate_registrations.py
 
 See [scripts/README.md](scripts/README.md) for detailed documentation on each script, usage examples, and development workflows.
 
+## Release Management
+
+The project includes an automated release script that handles version management, building, testing, tagging, and publishing.
+
+### Quick Release
+
+```bash
+# From project root
+release/release.sh
+```
+
+The script automatically:
+1. Loads configuration from `release/.release.env`
+2. Updates version in pom.xml
+3. Runs tests and builds the plugin
+4. Creates git commits and tags
+5. Pushes to remote repository
+
+### Release Configuration
+
+Configure releases by editing `release/.release.env`:
+
+```bash
+# Copy example file (first time only)
+cp release/.release.env.example release/.release.env
+
+# Edit configuration
+nano release/.release.env
+```
+
+**Configuration options:**
+- `RELEASE_VERSION` - Version to release (e.g., "1.1.0")
+- `NEXT_VERSION` - Next dev version (optional, auto-increments)
+- `SKIP_TESTS` - Skip tests for faster releases (default: false)
+- `DRY_RUN` - Preview changes without executing (default: false)
+- `AUTO_PUSH` - Automatically push to remote (default: false)
+
+### Release Workflow
+
+```bash
+# Test with dry run first
+DRY_RUN=true release/release.sh
+
+# Execute release
+release/release.sh
+
+# Or override inline
+RELEASE_VERSION=1.2.0 release/release.sh
+```
+
+**What happens during release:**
+1. Version update: `1.1.0-SNAPSHOT` → `1.1.0`
+2. Build and test the release artifact
+3. Git commit: "Release version 1.1.0"
+4. Git tag: `v1.1.0`
+5. Version update: `1.1.0` → `1.2.0-SNAPSHOT`
+6. Git commit: "Prepare for next development iteration"
+7. Push commits and tag to remote
+
+**Output:**
+- Release JAR: `target/sonar-mulesoft-plugin-1.1.0-FINAL.jar`
+- Git tag: `v1.1.0`
+- Next version: `1.2.0-SNAPSHOT`
+
+See [release/RELEASE.md](release/RELEASE.md) for detailed release documentation.
+
+## SonarQube Analysis
+
+Analyze the plugin's own source code with SonarQube for quality assurance.
+
+### Scanner Setup
+
+1. **Copy configuration files**:
+   ```bash
+   cp scanner.sh.example scanner.sh
+   cp sonar-project.properties.example sonar-project.properties
+   ```
+
+2. **Configure scanner.sh**:
+   ```bash
+   # Edit scanner.sh and update:
+   export JAVA_HOME="/path/to/your/java21"
+   SONAR_TOKEN="your_sonarqube_token_here"
+   ```
+
+3. **Configure sonar-project.properties**:
+   ```properties
+   sonar.host.url=http://localhost:9000
+   sonar.token=your_sonarqube_token_here
+   sonar.projectKey=sonar-mulesoft-plugin
+   ```
+
+### Running Analysis
+
+```bash
+# Compile the project first
+mvn clean compile test-compile
+
+# Run SonarQube analysis
+./scanner.sh
+```
+
+Or use properties file directly:
+```bash
+npx sonar-scanner
+```
+
+**Analysis Configuration:**
+- Java source version: 21
+- Source directories: `src/main/java`
+- Test directories: `src/test/java`
+- Binary directories: `target/classes`, `target/test-classes`
+
+View results at: `http://localhost:9000/dashboard?id=sonar-mulesoft-plugin`
+
 ## Testing
 
 ### Running Tests
@@ -589,7 +706,7 @@ You can use these files to:
 
 - **SonarQube Version**: 9.9+ (tested with 10.x)
 - **SonarQube Plugin API**: 10.7.0.2191
-- **Java Version**: 17 (minimum)
+- **Java Version**: 21 (minimum)
 - **Maven Version**: 3.6+ (for building)
 
 ### Supported File Types
@@ -713,11 +830,20 @@ scripts/build.sh
 
 ```
 lioncorp-mulesoft-plugin/
+├── release/                              # Release management
+│   ├── release.sh                       # Automated release script
+│   ├── .release.env                     # Release configuration (gitignored)
+│   ├── .release.env.example             # Release configuration template
+│   └── RELEASE.md                       # Release documentation
 ├── scripts/                              # Build and code generation scripts
 │   ├── build.sh                         # Main build automation script
 │   ├── generate_checks.py               # Generates skeleton check classes
 │   ├── generate_registrations.py        # Generates registration code
 │   └── README.md                        # Scripts documentation
+├── scanner.sh                            # SonarQube scanner (gitignored)
+├── scanner.sh.example                    # Scanner configuration template
+├── sonar-project.properties              # SonarQube config (gitignored)
+├── sonar-project.properties.example      # SonarQube config template
 ├── src/
 │   ├── main/
 │   │   └── java/com/lioncorp/sonar/mulesoft/
@@ -750,11 +876,11 @@ lioncorp-mulesoft-plugin/
 
 #### Java Version Error
 ```
-Error: Java 17 or higher is required
+Error: Java 21 or higher is required
 ```
-**Solution:** Install Java 17+ or set `JAVA_HOME` to Java 17+ installation:
+**Solution:** Install Java 21+ or set `JAVA_HOME` to Java 21+ installation:
 ```bash
-export JAVA_HOME=/path/to/java17
+export JAVA_HOME=/path/to/java21
 java -version  # Verify version
 ```
 
@@ -810,7 +936,7 @@ python3 --version
 
 **Solution:** Use the shaded FINAL jar:
 ```bash
-cp target/sonar-mulesoft-plugin-1.0.0-SNAPSHOT-FINAL.jar \
+cp target/sonar-mulesoft-plugin-1.1.0-SNAPSHOT-FINAL.jar \
    $SONARQUBE_HOME/extensions/plugins/sonar-mulesoft-plugin.jar
 ```
 
