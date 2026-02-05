@@ -56,7 +56,7 @@ npx sonar-scanner \
   -Dsonar.projectVersion="$PROJECT_VERSION" \
   -Dsonar.sources="$SOURCE_PATH" \
   -Dsonar.sourceEncoding=UTF-8 \
-  -Dsonar.java.source=17 \
+  -Dsonar.java.source=21 \
   -Dsonar.java.binaries="$SCRIPT_DIR/target/classes" \
   -Dsonar.scm.disabled=true \
   -Dsonar.verbose=true

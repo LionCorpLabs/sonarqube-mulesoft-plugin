@@ -20,7 +20,7 @@ sonar.tests=src/test/java
 sonar.sourceEncoding=UTF-8
 
 # Java Configuration
-sonar.java.source=17
+sonar.java.source=21
 sonar.java.binaries=target/classes
 sonar.java.test.binaries=target/test-classes
 
