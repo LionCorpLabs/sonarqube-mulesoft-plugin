@@ -6,6 +6,7 @@
 # This script automates the release process for the SonarQube MuleSoft plugin.
 #
 # Usage:
+#   ./release.sh                    # Uses settings from .release.env
 #   RELEASE_VERSION=1.0.0 ./release.sh
 #   RELEASE_VERSION=1.0.0 NEXT_VERSION=1.1.0 SKIP_TESTS=false ./release.sh
 #
@@ -20,6 +21,15 @@
 # =============================================================================
 
 set -e  # Exit on error
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Auto-load .release.env if it exists
+if [ -f "$SCRIPT_DIR/.release.env" ]; then
+    echo "Loading configuration from .release.env..."
+    source "$SCRIPT_DIR/.release.env"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -111,13 +121,15 @@ update_pom_version() {
     fi
 
     # Use sed to update version (works on both Linux and macOS)
-    # Only replace the project version (after <artifactId>), not XML declaration or dependencies
+    # Only replace the project version (within first 15 lines, after artifactId), not dependencies
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS - match version tag that follows artifactId
-        sed -i '' '/<artifactId>/,/<version>/ s|<version>.*</version>|<version>'"${new_version}"'</version>|' "$pom_file"
+        # macOS - only replace version in lines 1-15 (project metadata section)
+        sed -i '' '1,15 s|<version>.*-SNAPSHOT</version>|<version>'"${new_version}"'</version>|' "$pom_file"
+        sed -i '' '1,15 s|<version>[0-9.]*</version>|<version>'"${new_version}"'</version>|' "$pom_file"
     else
-        # Linux - match version tag that follows artifactId
-        sed -i '/<artifactId>/,/<version>/ s|<version>.*</version>|<version>'"${new_version}"'</version>|' "$pom_file"
+        # Linux - only replace version in lines 1-15 (project metadata section)
+        sed -i '1,15 s|<version>.*-SNAPSHOT</version>|<version>'"${new_version}"'</version>|' "$pom_file"
+        sed -i '1,15 s|<version>[0-9.]*</version>|<version>'"${new_version}"'</version>|' "$pom_file"
     fi
 
     print_info "Updated pom.xml to version: $new_version"
