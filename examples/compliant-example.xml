@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <!-- COMPLIANT: Using property placeholders for credentials -->
+    <http:request-config name="Secure_API_Config" doc:name="External API Configuration">
+        <http:request-connection host="${api.host}" port="${api.port}" protocol="HTTPS">
+            <http:authentication>
+                <http:basic-authentication username="${api.username}" password="${secure::api.password}"/>
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <!-- COMPLIANT: Using HTTPS for secure communication -->
+    <http:listener-config name="HTTPS_Listener_Config" doc:name="HTTPS Listener Configuration">
+        <http:listener-connection host="0.0.0.0" port="${https.port}" protocol="HTTPS">
+            <http:tls-configuration>
+                <http:trust-store path="${keystore.path}" password="${secure::keystore.password}"/>
+            </http:tls-configuration>
+        </http:listener-connection>
+    </http:listener-config>
+
+    <!-- COMPLIANT: Encrypted database connection with SSL -->
+    <db:config name="Secure_Database_Config" doc:name="Secure Database Configuration">
+        <db:my-sql-connection
+            host="${db.host}"
+            port="${db.port}"
+            user="${db.username}"
+            password="${secure::db.password}"
+            database="${db.name}">
+            <db:connection-properties>
+                <db:connection-property key="useSSL" value="true"/>
+                <db:connection-property key="requireSSL" value="true"/>
+            </db:connection-properties>
+        </db:my-sql-connection>
+    </db:config>
+
+    <!-- GLOBAL ERROR HANDLER: Centralized error handling -->
+    <error-handler name="global-error-handler" doc:name="Global Error Handler">
+        <on-error-propagate type="HTTP:TIMEOUT" doc:name="HTTP Timeout">
+            <logger level="ERROR" message="HTTP request timed out: #[error.description]" doc:name="Log Timeout"/>
+            <ee:transform doc:name="Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+                        output application/json
+                        ---
+                        {
+                            error: "REQUEST_TIMEOUT",
+                            message: "The external service did not respond in time",
+                            timestamp: now()
+                        }
+                    ]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">504</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+
+        <on-error-propagate type="DB:CONNECTIVITY" doc:name="Database Error">
+            <logger level="ERROR" message="Database connection failed: #[error.description]" doc:name="Log DB Error"/>
+            <ee:transform doc:name="Error Response">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+                        output application/json
+                        ---
+                        {
+                            error: "SERVICE_UNAVAILABLE",
+                            message: "Database service is temporarily unavailable",
+                            timestamp: now()
+                        }
+                    ]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+    </error-handler>
+
+    <!-- COMPLIANT: Well-structured flow with proper naming and documentation -->
+    <flow name="get-user-by-id-flow" doc:name="Retrieve User By ID">
+        <doc:description>
+            Retrieves user information by user ID.
+            Validates input, queries database using parameterized query, and returns user details.
+        </doc:description>
+
+        <http:listener
+            config-ref="HTTPS_Listener_Config"
+            path="/api/v1/users/{userId}"
+            doc:name="GET /api/v1/users/{userId}"/>
+
+        <!-- Input validation -->
+        <flow-ref name="validate-user-id-subflow" doc:name="Validate User ID"/>
+
+        <!-- Retrieve user data -->
+        <flow-ref name="get-user-from-database-subflow" doc:name="Get User From Database"/>
+
+        <!-- Transform response -->
+        <flow-ref name="transform-user-response-subflow" doc:name="Transform User Response"/>
+
+        <!-- Error handling -->
+        <error-handler>
+            <on-error-propagate type="VALIDATION:INVALID_USER_ID" doc:name="Invalid User ID">
+                <logger level="WARN" message="Invalid user ID provided: #[attributes.uriParams.userId]" doc:name="Log Validation Error"/>
+                <ee:transform doc:name="Validation Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+                            output application/json
+                            ---
+                            {
+                                error: "INVALID_USER_ID",
+                                message: "User ID must be a positive integer",
+                                timestamp: now()
+                            }
+                        ]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+
+            <on-error-propagate type="DB:QUERY_EXECUTION" doc:name="Query Execution Error">
+                <logger level="ERROR" message="Database query failed for user ID: #[attributes.uriParams.userId]" doc:name="Log Query Error"/>
+                <ee:transform doc:name="Database Error Response">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+                            output application/json
+                            ---
+                            {
+                                error: "DATABASE_ERROR",
+                                message: "Unable to retrieve user information",
+                                timestamp: now()
+                            }
+                        ]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- COMPLIANT: Well-named sub-flow with single responsibility -->
+    <sub-flow name="validate-user-id-subflow" doc:name="Validate User ID">
+        <doc:description>
+            Validates that the user ID parameter is a positive integer.
+            Raises VALIDATION:INVALID_USER_ID error if validation fails.
+        </doc:description>
+
+        <set-variable
+            variableName="userId"
+            value="#[attributes.uriParams.userId]"
+            doc:name="Extract User ID"/>
+
+        <validation:is-number
+            value="#[vars.userId]"
+            minValue="1"
+            message="User ID must be a positive integer"
+            doc:name="Validate User ID Format"/>
+    </sub-flow>
+
+    <!-- COMPLIANT: Parameterized database query (prevents SQL injection) -->
+    <sub-flow name="get-user-from-database-subflow" doc:name="Get User From Database">
+        <doc:description>
+            Retrieves user data from database using parameterized query.
+            Uses connection pooling and query timeout for reliability.
+        </doc:description>
+
+        <db:select
+            config-ref="Secure_Database_Config"
+            doc:name="Select User By ID"
+            queryTimeout="5"
+            queryTimeoutUnit="SECONDS">
+            <db:sql><![CDATA[
+                SELECT
+                    id,
+                    username,
+                    email,
+                    first_name,
+                    last_name,
+                    created_at,
+                    updated_at
+                FROM users
+                WHERE id = :userId
+                AND active = true
+            ]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+                userId: vars.userId
+            }]]]></db:input-parameters>
+        </db:select>
+
+        <!-- Check if user was found -->
+        <choice doc:name="User Found?">
+            <when expression="#[sizeOf(payload) == 0]">
+                <raise-error type="USER:NOT_FOUND" description="User not found with the provided ID"/>
+            </when>
+        </choice>
+
+        <set-variable
+            variableName="userRecord"
+            value="#[payload[0]]"
+            doc:name="Store User Record"/>
+    </sub-flow>
+
+    <!-- COMPLIANT: Clear transformation with meaningful variable names -->
+    <sub-flow name="transform-user-response-subflow" doc:name="Transform User Response">
+        <doc:description>
+            Transforms database record into API response format.
+            Filters sensitive fields and formats dates consistently.
+        </doc:description>
+
+        <ee:transform doc:name="Format User Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+
+                    var userRecord = vars.userRecord
+                    ---
+                    {
+                        id: userRecord.id,
+                        username: userRecord.username,
+                        email: userRecord.email,
+                        fullName: userRecord.first_name ++ " " ++ userRecord.last_name,
+                        profile: {
+                            firstName: userRecord.first_name,
+                            lastName: userRecord.last_name
+                        },
+                        metadata: {
+                            createdAt: userRecord.created_at as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+                            updatedAt: userRecord.updated_at as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"}
+                        }
+                    }
+                ]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">200</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+
+        <logger
+            level="INFO"
+            message="Successfully retrieved user #[vars.userId]"
+            doc:name="Log Successful Retrieval"/>
+    </sub-flow>
+
+    <!-- COMPLIANT: Batch processing instead of N+1 queries -->
+    <flow name="get-all-user-details-flow" doc:name="Get All User Details (Batch)">
+        <doc:description>
+            Retrieves all users with their details in a single optimized query.
+            Uses JOIN to avoid N+1 query problem.
+        </doc:description>
+
+        <http:listener
+            config-ref="HTTPS_Listener_Config"
+            path="/api/v1/users/details"
+            doc:name="GET /api/v1/users/details"/>
+
+        <!-- Single optimized query with JOIN -->
+        <db:select config-ref="Secure_Database_Config" doc:name="Select All Users With Details">
+            <db:sql><![CDATA[
+                SELECT
+                    u.id,
+                    u.username,
+                    u.email,
+                    ud.address,
+                    ud.phone,
+                    ud.country
+                FROM users u
+                INNER JOIN user_details ud ON u.id = ud.user_id
+                WHERE u.active = true
+                ORDER BY u.id
+                LIMIT 100
+            ]]></db:sql>
+        </db:select>
+
+        <ee:transform doc:name="Transform User List">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+                    ---
+                    {
+                        users: payload map {
+                            id: $.id,
+                            username: $.username,
+                            email: $.email,
+                            details: {
+                                address: $.address,
+                                phone: $.phone,
+                                country: $.country
+                            }
+                        },
+                        count: sizeOf(payload),
+                        timestamp: now()
+                    }
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <logger
+            level="INFO"
+            message="Retrieved #[sizeOf(payload.users)] users with details"
+            doc:name="Log Batch Retrieval"/>
+    </flow>
+
+    <!-- COMPLIANT: Async processing with circuit breaker pattern -->
+    <flow name="send-notifications-async-flow" doc:name="Send Notifications Asynchronously">
+        <doc:description>
+            Sends notifications to external service asynchronously with circuit breaker protection.
+            Non-blocking implementation improves throughput.
+        </doc:description>
+
+        <http:listener
+            config-ref="HTTPS_Listener_Config"
+            path="/api/v1/notifications"
+            doc:name="POST /api/v1/notifications"/>
+
+        <!-- Validate notification payload -->
+        <validation:is-not-null
+            value="#[payload.message]"
+            message="Notification message is required"/>
+
+        <!-- Process asynchronously -->
+        <async doc:name="Async Notification Processing">
+            <until-successful
+                maxRetries="3"
+                millisBetweenRetries="1000"
+                doc:name="Retry Strategy">
+                <http:request
+                    config-ref="Secure_API_Config"
+                    path="/notifications"
+                    method="POST"
+                    responseTimeout="5000"
+                    doc:name="Send Notification">
+                    <http:body><![CDATA[#[payload]]]></http:body>
+                </http:request>
+            </until-successful>
+
+            <logger
+                level="INFO"
+                message="Notification sent successfully"
+                doc:name="Log Success"/>
+        </async>
+
+        <!-- Return immediate response -->
+        <ee:transform doc:name="Acknowledgment Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+                    ---
+                    {
+                        status: "ACCEPTED",
+                        message: "Notification queued for processing",
+                        timestamp: now()
+                    }
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+</mule>

@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+                          http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <!-- MS001 VIOLATION: Hardcoded credentials -->
+    <http:request-config name="API_Config">
+        <http:request-connection host="api.example.com" port="443" protocol="HTTPS">
+            <http:authentication>
+                <http:basic-authentication username="admin" password="password123"/>
+            </http:authentication>
+        </http:request-connection>
+    </http:request-config>
+
+    <!-- MS002 VIOLATION: HTTP endpoint (should use HTTPS) -->
+    <http:listener-config name="HTTP_Listener_Config">
+        <http:listener-connection host="0.0.0.0" port="8081" protocol="HTTP"/>
+    </http:listener-config>
+
+    <!-- MS020 VIOLATION: Unencrypted database connection -->
+    <db:config name="Database_Config">
+        <db:my-sql-connection host="localhost" port="3306" user="root" password="admin" database="testdb"/>
+    </db:config>
+
+    <!-- MS024 VIOLATION: Hardcoded IP address -->
+    <http:request-config name="External_API">
+        <http:request-connection host="192.168.1.100" port="8080"/>
+    </http:request-config>
+
+    <!-- MS031 VIOLATION: Empty flow -->
+    <flow name="emptyFlow">
+        <!-- No components - should be removed -->
+    </flow>
+
+    <!-- MS032, MS037, MS047 VIOLATION: Large flow without error handler (God Flow) -->
+    <flow name="processData">
+        <http:listener config-ref="HTTP_Listener_Config" path="/process"/>
+        <logger level="INFO" message="Start"/>
+        <set-variable variableName="temp" value="#[payload]"/>
+        <db:select config-ref="Database_Config">
+            <!-- MS003 VIOLATION: SQL injection risk with string concatenation -->
+            <db:sql>SELECT * FROM users WHERE id = #[attributes.queryParams.userId]</db:sql>
+        </db:select>
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+                    ---
+                    payload
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <http:request config-ref="API_Config" path="/validate" method="POST"/>
+        <logger level="INFO" message="Processing"/>
+        <set-variable variableName="data" value="#[payload]"/>
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+                    ---
+                    payload
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" message="Transform complete"/>
+        <db:insert config-ref="Database_Config">
+            <db:sql>INSERT INTO logs (data) VALUES (#[payload])</db:sql>
+        </db:insert>
+        <logger level="INFO" message="Data inserted"/>
+        <http:request config-ref="External_API" path="/notify" method="POST"/>
+        <logger level="INFO" message="Notification sent"/>
+        <set-variable variableName="result" value="#[payload]"/>
+        <ee:transform>
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+                    output application/json
+                    ---
+                    {
+                        status: "success",
+                        data: payload
+                    }
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" message="Complete"/>
+    </flow>
+
+    <!-- MS018 VIOLATION: Sensitive data logging -->
+    <flow name="loginUser">
+        <http:listener config-ref="HTTP_Listener_Config" path="/login"/>
+        <logger level="INFO" message="Login attempt with password: #[payload.password]"/>
+        <logger level="INFO" message="Credit card: #[payload.creditCard]"/>
+        <logger level="INFO" message="SSN: #[payload.ssn]"/>
+        <set-payload value='{"status": "success"}'/>
+    </flow>
+
+    <!-- MS078 VIOLATION: Database query in loop (N+1 problem) -->
+    <flow name="getUserDetails">
+        <http:listener config-ref="HTTP_Listener_Config" path="/users"/>
+        <db:select config-ref="Database_Config">
+            <db:sql>SELECT id FROM users</db:sql>
+        </db:select>
+        <foreach>
+            <!-- Query executed for each user - N+1 problem -->
+            <db:select config-ref="Database_Config">
+                <db:sql>SELECT * FROM user_details WHERE user_id = #[payload.id]</db:sql>
+            </db:select>
+        </foreach>
+    </flow>
+
+    <!-- MS059 VIOLATION: Missing flow name -->
+    <flow>
+        <http:listener config-ref="HTTP_Listener_Config" path="/unnamed"/>
+        <logger message="This flow has no name attribute"/>
+    </flow>
+
+    <!-- MS060 VIOLATION: Vague flow name -->
+    <flow name="process">
+        <http:listener config-ref="HTTP_Listener_Config" path="/vague"/>
+        <logger message="Generic name"/>
+    </flow>
+
+    <!-- MS063 VIOLATION: Logger without meaningful message -->
+    <flow name="loggerTest">
+        <http:listener config-ref="HTTP_Listener_Config" path="/log"/>
+        <logger level="INFO" message="log"/>
+        <logger level="INFO" message="here"/>
+    </flow>
+
+    <!-- MS064 VIOLATION: Uninformative variable names -->
+    <flow name="variableTest">
+        <http:listener config-ref="HTTP_Listener_Config" path="/vars"/>
+        <set-variable variableName="temp" value="#[payload]"/>
+        <set-variable variableName="data" value="#[vars.temp]"/>
+        <set-variable variableName="x" value="#[vars.data]"/>
+    </flow>
+
+    <!-- MS066 VIOLATION: TODO comments -->
+    <flow name="todoFlow">
+        <http:listener config-ref="HTTP_Listener_Config" path="/todo"/>
+        <!-- TODO: Implement proper validation -->
+        <!-- FIXME: This is a temporary workaround -->
+        <logger message="Work in progress"/>
+    </flow>
+
+    <!-- MS088 VIOLATION: Error swallowing -->
+    <flow name="errorSwallowing">
+        <http:listener config-ref="HTTP_Listener_Config" path="/error"/>
+        <try>
+            <http:request config-ref="API_Config" path="/endpoint" method="GET"/>
+            <error-handler>
+                <on-error-continue type="ANY">
+                    <!-- Empty error handler - errors are swallowed -->
+                </on-error-continue>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- MS093 VIOLATION: Exposed stack trace -->
+    <flow name="stackTraceExposure">
+        <http:listener config-ref="HTTP_Listener_Config" path="/trace"/>
+        <try>
+            <flow-ref name="riskyOperation"/>
+            <error-handler>
+                <on-error-propagate type="ANY">
+                    <!-- MS093: printStackTrace() exposes internal details -->
+                    <set-payload value="#[error.exception.printStackTrace()]"/>
+                </on-error-propagate>
+            </error-handler>
+        </try>
+    </flow>
+
+    <!-- MS072 VIOLATION: Synchronous processing that should be async -->
+    <flow name="slowSync">
+        <http:listener config-ref="HTTP_Listener_Config" path="/slow"/>
+        <http:request config-ref="API_Config" path="/long-running" method="POST"/>
+        <http:request config-ref="API_Config" path="/another-slow" method="POST"/>
+        <http:request config-ref="API_Config" path="/yet-another" method="POST"/>
+    </flow>
+
+    <!-- MS035 VIOLATION: Unused sub-flow -->
+    <sub-flow name="unusedSubFlow">
+        <logger message="This sub-flow is never called"/>
+    </sub-flow>
+
+    <!-- MS042 VIOLATION: Excessive choice branches -->
+    <flow name="tooManyChoices">
+        <http:listener config-ref="HTTP_Listener_Config" path="/choice"/>
+        <choice>
+            <when expression="#[payload.type == 'A']">
+                <logger message="Type A"/>
+            </when>
+            <when expression="#[payload.type == 'B']">
+                <logger message="Type B"/>
+            </when>
+            <when expression="#[payload.type == 'C']">
+                <logger message="Type C"/>
+            </when>
+            <when expression="#[payload.type == 'D']">
+                <logger message="Type D"/>
+            </when>
+            <when expression="#[payload.type == 'E']">
+                <logger message="Type E"/>
+            </when>
+            <when expression="#[payload.type == 'F']">
+                <logger message="Type F"/>
+            </when>
+            <when expression="#[payload.type == 'G']">
+                <logger message="Type G"/>
+            </when>
+            <otherwise>
+                <logger message="Other"/>
+            </otherwise>
+        </choice>
+    </flow>
+
+</mule>

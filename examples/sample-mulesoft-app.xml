@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:java="http://www.mulesoft.org/schema/mule/java"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/java http://www.mulesoft.org/schema/mule/java/current/mule-java.xsd">
+
+  <!-- Example 1: Good flow with proper naming and structure -->
+  <flow name="process-customer-order">
+    <http:listener path="/orders" method="POST"/>
+    <logger level="INFO" message="Received order: #[payload]"/>
+    <flow-ref name="validate-order"/>
+    <flow-ref name="save-order"/>
+    <set-payload value="#[{status: 'success', orderId: vars.orderId}]"/>
+  </flow>
+
+  <!-- Example 2: Sub-flow for reusability -->
+  <sub-flow name="validate-order">
+    <logger message="Validating order"/>
+    <java:invoke class="com.example.OrderValidator" method="validate">
+      <java:args>
+        #[{order: payload}]
+      </java:args>
+    </java:invoke>
+  </sub-flow>
+
+  <!-- Example 3: BAD - Hardcoded credentials (will trigger HardcodedCredentials rule) -->
+  <http:request-config name="BadApiConfig">
+    <http:request-connection host="api.example.com" port="443" protocol="HTTPS">
+      <http:authentication>
+        <http:basic-authentication username="admin" password="password123"/>
+      </http:authentication>
+    </http:request-connection>
+  </http:request-config>
+
+  <!-- Example 4: GOOD - Using property placeholders -->
+  <http:request-config name="GoodApiConfig">
+    <http:request-connection host="${api.host}" port="${api.port}">
+      <http:authentication>
+        <http:basic-authentication username="${api.username}" password="${secure::api.password}"/>
+      </http:authentication>
+    </http:request-connection>
+  </http:request-config>
+
+  <!-- Example 5: BAD - Empty flow (will trigger EmptyFlow rule) -->
+  <flow name="empty-flow">
+  </flow>
+
+  <!-- Example 6: BAD - Missing flow name (will trigger MissingFlowName rule) -->
+  <flow>
+    <logger message="This flow has no name"/>
+  </flow>
+
+  <!-- Example 7: BAD - Using dangerous Java class (will trigger JavaClassSecurity rule) -->
+  <flow name="dangerous-java-usage">
+    <java:invoke class="java.lang.Runtime" method="getRuntime"/>
+  </flow>
+
+  <!-- Example 8: Custom transformer with Java class -->
+  <flow name="transform-data">
+    <custom-transformer class="com.example.DataTransformer"/>
+  </flow>
+
+  <!-- Example 9: BAD - Large flow with too many components (will trigger LargeFlow rule) -->
+  <flow name="overly-complex-flow">
+    <http:listener path="/complex" method="GET"/>
+    <logger message="Step 1"/>
+    <set-variable variableName="var1" value="value1"/>
+    <logger message="Step 2"/>
+    <set-variable variableName="var2" value="value2"/>
+    <logger message="Step 3"/>
+    <set-variable variableName="var3" value="value3"/>
+    <logger message="Step 4"/>
+    <set-variable variableName="var4" value="value4"/>
+    <logger message="Step 5"/>
+    <set-variable variableName="var5" value="value5"/>
+    <logger message="Step 6"/>
+    <set-variable variableName="var6" value="value6"/>
+    <logger message="Step 7"/>
+    <set-variable variableName="var7" value="value7"/>
+    <logger message="Step 8"/>
+    <set-variable variableName="var8" value="value8"/>
+    <logger message="Step 9"/>
+  </flow>
+
+  <!-- Example 10: GOOD - Refactored into smaller flows -->
+  <flow name="well-structured-flow">
+    <http:listener path="/structured" method="GET"/>
+    <flow-ref name="initialize-variables"/>
+    <flow-ref name="process-data"/>
+    <flow-ref name="finalize-response"/>
+  </flow>
+
+  <sub-flow name="initialize-variables">
+    <set-variable variableName="var1" value="value1"/>
+    <set-variable variableName="var2" value="value2"/>
+  </sub-flow>
+
+  <sub-flow name="process-data">
+    <logger message="Processing data"/>
+    <java:invoke class="com.example.DataProcessor" method="process"/>
+  </sub-flow>
+
+  <sub-flow name="save-order">
+    <logger message="Saving order to database"/>
+    <java:new class="com.example.OrderRepository" constructor="OrderRepository()">
+      <java:args>
+        #[{connectionString: ${db.connection}}]
+      </java:args>
+    </java:new>
+  </sub-flow>
+
+  <sub-flow name="finalize-response">
+    <set-payload value="#[{status: 'success'}]"/>
+  </sub-flow>
+
+</mule>
