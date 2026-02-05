@@ -1,6 +1,6 @@
 ⚠️ Disclaimer: This project is in **no way affiliated with or endorsed by SonarSource or MuleSoft.** It is an independent open-source initiative developed to enhance code quality and security for MuleSoft applications. Not fully perfect, and if you find any room for improvement, please leave a comment in the Issues section of this GitHub repository. Thank you!
 
-# SonarQube MuleSoft Plugin
+#  🫏 🐋 SonarQube MuleSoft Plugin
 
 A comprehensive static code analysis plugin for SonarQube that analyzes MuleSoft XML configuration files and embedded Java code to detect security vulnerabilities, code quality issues, performance problems, and maintainability concerns.
 
