@@ -22,4 +22,6 @@ Thumbs.db
 # SonarQube
 .sonar/
 DEBUG.md
+scanner.sh
+sonar-project.properties
 

@@ -1,7 +1,13 @@
 # SonarQube Project Configuration for MuleSoft Plugin
+#
+# Setup:
+# 1. Copy this file to sonar-project.properties: cp sonar-project.properties.example sonar-project.properties
+# 2. Update sonar.token with your token from SonarQube (User > My Account > Security)
+# 3. Update sonar.host.url if using a different server
+
 # Server Configuration
 sonar.host.url=http://localhost:9000
-sonar.token=squ_b1cc529e7fa62c4f0c6e5d5cc7d176f932c07d3e
+sonar.token=YOUR_SONARQUBE_TOKEN_HERE
 
 # Project Information
 sonar.projectKey=sonar-mulesoft-plugin

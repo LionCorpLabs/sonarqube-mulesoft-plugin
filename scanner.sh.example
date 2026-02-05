@@ -2,10 +2,17 @@
 
 # SonarQube Scanner Script for MuleSoft Plugin
 # This script runs the SonarQube scanner on the plugin repository itself
+#
+# Setup:
+# 1. Copy this file to scanner.sh: cp scanner.sh.example scanner.sh
+# 2. Update SONAR_TOKEN with your token from SonarQube
+# 3. Update JAVA_HOME to match your Java installation path
+# 4. Update SONAR_HOST if using a different server
 
 export SONAR_SCANNER_OPTS="-Xmx8G -Xms8G -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -XX:+UseStringDeduplication"
 
-export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+# Update this to your Java installation path
+export JAVA_HOME="/path/to/your/java/home"
 
 
 set -e  # Exit on error
@@ -20,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Configuration
 SONAR_HOST="http://localhost:9000"
-SONAR_TOKEN="squ_b1cc529e7fa62c4f0c6e5d5cc7d176f932c07d3e"
+SONAR_TOKEN="YOUR_SONARQUBE_TOKEN_HERE"  # Generate from: User > My Account > Security
 PROJECT_KEY="sonar-mulesoft-plugin"
 PROJECT_NAME="SonarQube MuleSoft Plugin"
 PROJECT_VERSION="1.1.0-SNAPSHOT"
